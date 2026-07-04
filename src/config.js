@@ -30,6 +30,10 @@ export function loadConfig(overrides = {}) {
     // Audit log: on by default, disable with GODOZO_AUDIT=off, relocate with GODOZO_AUDIT_FILE.
     audit: (process.env.GODOZO_AUDIT || '').toLowerCase() !== 'off',
     auditFile: process.env.GODOZO_AUDIT_FILE || '',
+    slack: {
+      botToken: process.env.GODOZO_SLACK_BOT_TOKEN || '',
+      channel: process.env.GODOZO_SLACK_CHANNEL || '',
+    },
     telegram: {
       token: process.env.GODOZO_TELEGRAM_TOKEN || '',
       chatId: process.env.GODOZO_TELEGRAM_CHAT_ID || '',

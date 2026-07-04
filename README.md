@@ -128,7 +128,9 @@ can't inject shell). stdout is sent back as the reply. Only allowlisted users
 | `GODOZO_TELEGRAM_CHAT_ID` | your chat id from @userinfobot | — (required) |
 | `GODOZO_LABEL`            | source name shown in messages | `godozo` |
 | `GODOZO_DEFAULT_TIMEOUT`  | approval wait, seconds | `600` |
-| `GODOZO_CHANNEL`          | which channel to use | `telegram` |
+| `GODOZO_CHANNEL`          | which channel to use (`telegram` or `slack`) | `telegram` |
+| `GODOZO_SLACK_BOT_TOKEN`  | Slack bot token (`xoxb-…`) when channel=slack | — |
+| `GODOZO_SLACK_CHANNEL`    | Slack channel id (`C…`) | — |
 | `GODOZO_AUDIT`            | audit log on/off (`off` disables) | on |
 | `GODOZO_AUDIT_FILE`       | audit log path | `~/.godozo/audit.jsonl` |
 
@@ -150,7 +152,7 @@ cat ~/.godozo/audit.jsonl  # raw JSONL for grep / jq
 
 ## Roadmap
 
-- **Channels:** Slack (interactive buttons), email, SMS/WhatsApp, plus escalation ("no answer in N min → escalate").
+- **Channels:** Slack *notify* ships now (`GODOZO_CHANNEL=slack`); Slack interactive *approvals* (Socket Mode), email, SMS/WhatsApp, and escalation ("no answer in N min → escalate") are next. Multi-channel fan-out (alert Slack *and* Telegram at once) planned.
 - **Hooks:** first-class Claude Code hook helpers (`Stop`/`Notification` → notify, `PreToolUse` → gate).
 - **SDK:** thin Python/TS clients for custom agents.
 - **Audit:** local JSONL ships today (`godozo log`); hosted, queryable, retention + export is the roadmap.

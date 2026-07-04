@@ -113,10 +113,9 @@ async function main() {
   if (cmd === 'doctor') {
     try {
       const h = await gd.health();
-      const chat = gd.config.telegram.chatId || '(unset!)';
-      console.log(`✅ channel=${gd.channel} bot=@${h.bot} chat=${chat}`);
+      console.log(`✅ channel=${gd.channel} bot=${h.bot ? '@' + h.bot : '(ok)'}${h.target ? ` target=${h.target}` : ''}`);
       console.log(`   audit: ${auditPath(gd.config) || 'disabled'}`);
-      return gd.config.telegram.chatId ? EXIT.OK : EXIT.ERROR;
+      return EXIT.OK;
     } catch (e) { console.error(`✗ ${e.message}`); return EXIT.ERROR; }
   }
 

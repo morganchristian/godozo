@@ -109,7 +109,7 @@ export function createTelegramChannel(cfg) {
   async function health() {
     requireCreds();
     const me = await tg(token, 'getMe', {});
-    return { ok: true, bot: me.username };
+    return { ok: true, bot: me.username, target: chatId };
   }
 
   // Two-way bridge: long-poll for incoming text from allowlisted users, hand

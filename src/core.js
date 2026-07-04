@@ -13,9 +13,11 @@
 import { loadConfig } from './config.js';
 import { audit } from './audit.js';
 import { createTelegramChannel } from './channels/telegram.js';
+import { createSlackChannel } from './channels/slack.js';
 
 const CHANNELS = {
   telegram: createTelegramChannel,
+  slack: createSlackChannel,
 };
 
 export function createGodozo(overrides = {}) {
