@@ -159,4 +159,4 @@ cat ~/.godozo/audit.jsonl  # raw JSONL for grep / jq
 
 ## License
 
-Apache License 2.0 © 2026 Morgan Christian — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+Apache License 2.0 © 2026 MC375 Ventures — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
