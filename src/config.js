@@ -1,0 +1,36 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Minimal .env loader (no dependency). Reads GODOZO_ENV or ./.env and injects
+// any KEY=VALUE pairs that aren't already set in the environment.
+function loadDotEnv() {
+  const file = process.env.GODOZO_ENV || path.resolve(process.cwd(), '.env');
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
+
+export function loadConfig(overrides = {}) {
+  loadDotEnv();
+  return {
+    channel: process.env.GODOZO_CHANNEL || 'telegram',
+    label: process.env.GODOZO_LABEL || 'godozo',
+    defaultTimeoutMs: (Number(process.env.GODOZO_DEFAULT_TIMEOUT) || 600) * 1000,
+    telegram: {
+      token: process.env.GODOZO_TELEGRAM_TOKEN || '',
+      chatId: process.env.GODOZO_TELEGRAM_CHAT_ID || '',
+    },
+    ...overrides,
+  };
+}

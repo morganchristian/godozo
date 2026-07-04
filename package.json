@@ -1,0 +1,40 @@
+{
+  "name": "godozo",
+  "version": "0.1.0",
+  "description": "Notify and get approvals from your AI agents — on your phone. A tiny, self-hostable human-in-the-loop relay for Claude Code, MCP clients, and any script.",
+  "type": "module",
+  "bin": {
+    "godozo": "bin/godozo.js"
+  },
+  "exports": {
+    ".": "./src/core.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "mcp"
+  ],
+  "scripts": {
+    "mcp": "node mcp/server.js",
+    "doctor": "node bin/godozo.js doctor"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "mcp",
+    "claude-code",
+    "human-in-the-loop",
+    "approvals",
+    "notifications",
+    "telegram"
+  ],
+  "license": "MIT",
+  "author": "Morgan Christian"
+}
