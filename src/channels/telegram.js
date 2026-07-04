@@ -68,6 +68,11 @@ export function createTelegramChannel(cfg) {
         offset = u.update_id + 1;
         const cq = u.callback_query;
         if (!cq || !cq.data || !cq.data.startsWith(`gd:${id}:`)) continue;
+        // Only an allowlisted user may resolve the approval — reject anyone else.
+        if (cfg.telegram.allow.length && !cfg.telegram.allow.includes(String(cq.from?.id))) {
+          await tg(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: 'Not authorized' }).catch(() => {});
+          continue;
+        }
         const idx = Number(cq.data.split(':')[2]);
         const decision = acts[idx];
         const approved = idx === 0;

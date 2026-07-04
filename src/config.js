@@ -30,6 +30,11 @@ export function loadConfig(overrides = {}) {
     telegram: {
       token: process.env.GODOZO_TELEGRAM_TOKEN || '',
       chatId: process.env.GODOZO_TELEGRAM_CHAT_ID || '',
+      // Who may answer approvals. Defaults to the configured chat id, so only
+      // YOU can resolve a gate even though anyone can message the bot. Override
+      // with a comma-separated list of Telegram user ids for a team.
+      allow: (process.env.GODOZO_TELEGRAM_ALLOW || process.env.GODOZO_TELEGRAM_CHAT_ID || '')
+        .split(',').map((s) => s.trim()).filter(Boolean),
     },
     ...overrides,
   };
