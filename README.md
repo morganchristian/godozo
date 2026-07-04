@@ -85,6 +85,32 @@ More on this split in [`DESIGN.md`](./DESIGN.md).
 
 ---
 
+## Two-way: text your bot (`godozo listen`)
+
+godozo also runs *the other direction* — you text your bot, it runs a command on
+your machine, and the output comes back. This turns any agent or script into
+something you can drive from your phone.
+
+```bash
+# echo loop — text your bot, it replies "you said: ..." (great first test)
+node bin/godozo.js listen --echo
+
+# wire it to an agent — each message you send becomes a prompt
+node bin/godozo.js listen --exec 'claude -p "$GODOZO_MESSAGE"'
+```
+
+Each incoming message is passed to the command on **stdin** and as
+**`$GODOZO_MESSAGE`** (never spliced into the command string, so message text
+can't inject shell). stdout is sent back as the reply. Only allowlisted users
+(`GODOZO_TELEGRAM_ALLOW`, default = your chat id) can drive it.
+
+> **One poller per bot token.** Telegram allows a single `getUpdates` listener
+> per token, so don't run `listen` and a `gate` on the *same* token at once
+> (outbound `notify` is fine alongside `listen`). Use a second bot for both, or
+> the unified daemon on the roadmap.
+
+---
+
 ## Configuration
 
 | Env | Meaning | Default |

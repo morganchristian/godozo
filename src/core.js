@@ -30,6 +30,11 @@ export function createGodozo(overrides = {}) {
     notify: (opts) => channel.notify(normalizeNotify(opts)),
     requestApproval: (opts) => channel.requestApproval(normalizeApproval(opts, config)),
     health: () => channel.health(),
+    // Two-way: block, long-polling incoming messages → handler → reply.
+    listen: (handler, opts) => {
+      if (!channel.listen) throw new Error(`channel ${channel.name} does not support listen`);
+      return channel.listen(handler, opts);
+    },
   };
 }
 

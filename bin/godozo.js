@@ -5,6 +5,7 @@
 //   godozo gate --title "deploy prod?" --detail "$CMD" && ./deploy.sh
 //
 // gate's exit code IS the decision, so it composes with && / || in scripts.
+import { spawn } from 'node:child_process';
 import { createGodozo } from '../src/core.js';
 
 const EXIT = { OK: 0, DENIED: 10, TIMEOUT: 20, ERROR: 1 };
@@ -14,8 +15,15 @@ const HELP = `godozo — notify + get approvals from your agents, on your phone
 Usage:
   godozo notify <message> [--title T] [--label L]
   godozo gate --title T [--detail D] [--timeout SECONDS] [--label L]
+  godozo listen --exec "<command>" [--timeout SECONDS]
   godozo doctor
   godozo --help | --version
+
+listen (two-way): text your bot → each message runs <command> → stdout is the
+reply. The message is passed on stdin and as $GODOZO_MESSAGE (never spliced into
+the command, so message text can't inject shell). Only allowlisted users can drive it.
+  e.g.  godozo listen --exec 'claude -p "$GODOZO_MESSAGE"'
+        godozo listen --echo     # test loop (replies with your text)
 
 gate exit codes:  0 approved · 10 denied · 20 timed out · 1 error
   e.g.  godozo gate --title "deploy prod?" && ./deploy.sh
@@ -67,6 +75,19 @@ async function main() {
     return r.approved ? EXIT.OK : EXIT.DENIED;
   }
 
+  if (cmd === 'listen') {
+    const exec = str(args.exec);
+    const echo = args.echo === true;
+    if (!exec && !echo) { console.error('listen: pass --exec "<command>" (or --echo to test)'); return EXIT.ERROR; }
+    const timeoutMs = args.timeout ? Number(args.timeout) * 1000 : 120000;
+    const handler = echo
+      ? async ({ text }) => `you said: ${text}`
+      : async ({ text, from }) => runExec(exec, text, { timeoutMs, from });
+    console.error(`godozo listening (${echo ? 'echo' : 'exec'} mode) — text your bot; Ctrl-C to stop`);
+    await gd.listen(handler);
+    return EXIT.OK;
+  }
+
   if (cmd === 'doctor') {
     try {
       const h = await gd.health();
@@ -82,6 +103,28 @@ async function main() {
 
 // A bare `--flag` parses to `true`; coerce that back to undefined for value opts.
 function str(v) { return typeof v === 'string' ? v : undefined; }
+
+// Run a shell command per incoming message. The message is passed via stdin AND
+// $GODOZO_MESSAGE — never interpolated into the command string, so message
+// content can't inject shell. stdout is the reply.
+function runExec(cmd, message, { timeoutMs, from }) {
+  return new Promise((resolve) => {
+    const child = spawn('sh', ['-c', cmd], {
+      env: { ...process.env, GODOZO_MESSAGE: message, GODOZO_FROM: from || '' },
+    });
+    let out = '', err = '';
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('error', (e) => { clearTimeout(timer); resolve(`⚠️ ${e.message}`); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(out.trim() || '(no output)');
+      else resolve(`⚠️ exited ${code}${err ? `: ${err.trim().slice(0, 500)}` : ''}`);
+    });
+    child.stdin.end(message);
+  });
+}
 
 main()
   .then((code) => process.exit(code))

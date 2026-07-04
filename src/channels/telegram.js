@@ -6,6 +6,20 @@
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Telegram caps messages at 4096 chars; split long replies on newlines.
+function chunkText(s, max = 3900) {
+  const out = [];
+  let rest = s;
+  while (rest.length > max) {
+    let cut = rest.lastIndexOf('\n', max);
+    if (cut < max * 0.5) cut = max;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest.length) out.push(rest);
+  return out;
+}
+
 async function tg(token, method, body) {
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
@@ -98,5 +112,60 @@ export function createTelegramChannel(cfg) {
     return { ok: true, bot: me.username };
   }
 
-  return { name: 'telegram', notify, requestApproval, health };
+  // Two-way bridge: long-poll for incoming text from allowlisted users, hand
+  // each message to handler({ text, from }), and send its reply back (chunked).
+  //
+  // NOTE: Telegram allows only ONE getUpdates poller per bot token. Don't run
+  // this at the same time as a `gate`/requestApproval on the SAME token (they'd
+  // fight over getUpdates → 409). Outbound `notify` is fine alongside it. Use a
+  // separate bot token if you need both, or the future unified daemon.
+  async function listen(handler, { pollSec = 30 } = {}) {
+    requireCreds();
+    const allow = cfg.telegram.allow;
+    let offset = 0;
+    try {
+      const seed = await tg(token, 'getUpdates', { timeout: 0, allowed_updates: ['message'] });
+      if (seed.length) offset = seed[seed.length - 1].update_id + 1;
+    } catch { /* non-fatal */ }
+
+    let running = true;
+    const stop = () => { running = false; };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+
+    while (running) {
+      let updates = [];
+      try {
+        updates = await tg(token, 'getUpdates', { offset, timeout: pollSec, allowed_updates: ['message'] });
+      } catch { await sleep(1500); continue; }
+
+      for (const u of updates) {
+        offset = u.update_id + 1;
+        const m = u.message;
+        if (!m || !m.text) continue;
+        const fromId = String(m.from?.id || '');
+        const from = m.from?.username ? `@${m.from.username}` : (m.from?.first_name || 'someone');
+
+        // Only allowlisted users may drive the handler (it runs commands!).
+        if (allow.length && !allow.includes(fromId)) {
+          await tg(token, 'sendMessage', { chat_id: m.chat.id, text: '🚫 Not authorized.' }).catch(() => {});
+          continue;
+        }
+        if (m.text.trim() === '/start') {
+          await tg(token, 'sendMessage', { chat_id: m.chat.id, text: "godozo is listening — send a message and I'll run it." }).catch(() => {});
+          continue;
+        }
+
+        await tg(token, 'sendChatAction', { chat_id: m.chat.id, action: 'typing' }).catch(() => {});
+        let reply;
+        try { reply = await handler({ text: m.text, from, chatId: m.chat.id }); }
+        catch (e) { reply = `⚠️ ${e.message}`; }
+        for (const part of chunkText(String(reply ?? '').trim() || '(no output)')) {
+          await tg(token, 'sendMessage', { chat_id: m.chat.id, text: part }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  return { name: 'telegram', notify, requestApproval, health, listen };
 }

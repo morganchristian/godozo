@@ -56,6 +56,22 @@ version generalizes this to a durable **pending-approval store** that any
 channel's callback can resolve — but the local single-operator version needs no
 database at all.
 
+## Two-way bridge (`listen`)
+
+`notify` / `requestApproval` are godozo talking *to* you. `listen` is the
+reverse: a long-poll loop reads incoming messages from allowlisted users, hands
+each to a handler, and sends the reply back. The CLI's `--exec` handler runs a
+shell command per message (message on stdin + `$GODOZO_MESSAGE`, never
+interpolated), so you can bridge to any agent — `claude -p "$GODOZO_MESSAGE"`, a
+REPL, a script.
+
+Because Telegram permits only one `getUpdates` poller per bot token, `listen`
+and `gate` can't share a token simultaneously. The clean long-term answer is a
+single **unified daemon** that owns the one poll loop and dispatches each update
+to the right consumer (approval vs chat) — that also becomes the natural home
+for escalation and multi-channel. For now: separate tokens, or one mode at a
+time. (Outbound `notify` never polls, so it always coexists fine.)
+
 ## MCP and hooks: the agent's voice vs the harness's reflexes
 
 Two integration surfaces, on purpose:
