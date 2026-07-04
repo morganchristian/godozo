@@ -95,9 +95,18 @@ something you can drive from your phone.
 # echo loop — text your bot, it replies "you said: ..." (great first test)
 node bin/godozo.js listen --echo
 
-# wire it to an agent — each message you send becomes a prompt
+# chat-only agent bridge (SAFE) — tools disabled, so it can only ANSWER,
+# never run commands or edit files. The message is read from stdin.
+node bin/godozo.js listen --exec 'claude -p --tools ""'
+
+# full-agent bridge (POWERFUL, RISKY) — the agent CAN use tools driven by your
+# texts, unattended. Only if you fully trust the channel: texting becomes acting.
 node bin/godozo.js listen --exec 'claude -p "$GODOZO_MESSAGE"'
 ```
+
+> ⚠️ **Chat vs agent.** A *chat* bridge (`--tools ""`) just answers — low risk.
+> An *agent* bridge with tools can take actions from whatever is texted to the
+> bot, with no per-action approval. Prefer chat-only unless you really mean it.
 
 Each incoming message is passed to the command on **stdin** and as
 **`$GODOZO_MESSAGE`** (never spliced into the command string, so message text
