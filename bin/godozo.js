@@ -6,7 +6,9 @@
 //
 // gate's exit code IS the decision, so it composes with && / || in scripts.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { createGodozo } from '../src/core.js';
+import { auditPath } from '../src/audit.js';
 
 const EXIT = { OK: 0, DENIED: 10, TIMEOUT: 20, ERROR: 1 };
 
@@ -16,6 +18,7 @@ Usage:
   godozo notify <message> [--title T] [--label L]
   godozo gate --title T [--detail D] [--timeout SECONDS] [--label L]
   godozo listen --exec "<command>" [--timeout SECONDS]
+  godozo log [--tail N]
   godozo doctor
   godozo --help | --version
 
@@ -88,11 +91,31 @@ async function main() {
     return EXIT.OK;
   }
 
+  if (cmd === 'log') {
+    const file = auditPath(gd.config);
+    if (!file) { console.log('audit is disabled (GODOZO_AUDIT=off)'); return EXIT.OK; }
+    if (!fs.existsSync(file)) { console.log(`(no audit log yet at ${file})`); return EXIT.OK; }
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    const n = args.tail ? Number(args.tail) : 20;
+    for (const line of lines.slice(-n)) {
+      try {
+        const e = JSON.parse(line);
+        let d = '';
+        if (e.type === 'approval') d = `${e.title} → ${e.timedOut ? 'TIMED_OUT' : (e.approved ? 'APPROVED' : 'DENIED')}${e.by ? ' by ' + e.by : ''}`;
+        else if (e.type === 'notify') d = e.title ? `${e.title}: ${e.message ?? ''}` : (e.message ?? '');
+        else if (e.type === 'message') d = `${e.from}: ${e.text}`;
+        console.log(`${e.ts}  ${String(e.type).padEnd(8)} ${d}`);
+      } catch { console.log(line); }
+    }
+    return EXIT.OK;
+  }
+
   if (cmd === 'doctor') {
     try {
       const h = await gd.health();
       const chat = gd.config.telegram.chatId || '(unset!)';
       console.log(`✅ channel=${gd.channel} bot=@${h.bot} chat=${chat}`);
+      console.log(`   audit: ${auditPath(gd.config) || 'disabled'}`);
       return gd.config.telegram.chatId ? EXIT.OK : EXIT.ERROR;
     } catch (e) { console.error(`✗ ${e.message}`); return EXIT.ERROR; }
   }

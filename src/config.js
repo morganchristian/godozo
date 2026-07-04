@@ -27,6 +27,9 @@ export function loadConfig(overrides = {}) {
     channel: process.env.GODOZO_CHANNEL || 'telegram',
     label: process.env.GODOZO_LABEL || 'godozo',
     defaultTimeoutMs: (Number(process.env.GODOZO_DEFAULT_TIMEOUT) || 600) * 1000,
+    // Audit log: on by default, disable with GODOZO_AUDIT=off, relocate with GODOZO_AUDIT_FILE.
+    audit: (process.env.GODOZO_AUDIT || '').toLowerCase() !== 'off',
+    auditFile: process.env.GODOZO_AUDIT_FILE || '',
     telegram: {
       token: process.env.GODOZO_TELEGRAM_TOKEN || '',
       chatId: process.env.GODOZO_TELEGRAM_CHAT_ID || '',

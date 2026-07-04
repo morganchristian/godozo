@@ -120,8 +120,22 @@ can't inject shell). stdout is sent back as the reply. Only allowlisted users
 | `GODOZO_LABEL`            | source name shown in messages | `godozo` |
 | `GODOZO_DEFAULT_TIMEOUT`  | approval wait, seconds | `600` |
 | `GODOZO_CHANNEL`          | which channel to use | `telegram` |
+| `GODOZO_AUDIT`            | audit log on/off (`off` disables) | on |
+| `GODOZO_AUDIT_FILE`       | audit log path | `~/.godozo/audit.jsonl` |
 
 Config is read from the environment or a `.env` file in the working directory.
+
+## Audit log
+
+Every notify, approval (with the decision + who + when), and inbound message is
+appended as one JSON line to `~/.godozo/audit.jsonl` — a durable, greppable
+record. On by default; `GODOZO_AUDIT=off` disables it, `GODOZO_AUDIT_FILE`
+relocates it.
+
+```bash
+godozo log --tail 20       # recent entries, human-readable
+cat ~/.godozo/audit.jsonl  # raw JSONL for grep / jq
+```
 
 ---
 
@@ -130,7 +144,7 @@ Config is read from the environment or a `.env` file in the working directory.
 - **Channels:** Slack (interactive buttons), email, SMS/WhatsApp, plus escalation ("no answer in N min → escalate").
 - **Hooks:** first-class Claude Code hook helpers (`Stop`/`Notification` → notify, `PreToolUse` → gate).
 - **SDK:** thin Python/TS clients for custom agents.
-- **Audit:** a durable log of every approval — who, when, what.
+- **Audit:** local JSONL ships today (`godozo log`); hosted, queryable, retention + export is the roadmap.
 
 ## License
 

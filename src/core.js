@@ -11,6 +11,7 @@
 // Telegram; Slack / email / SMS are the roadmap (see DESIGN.md).
 
 import { loadConfig } from './config.js';
+import { audit } from './audit.js';
 import { createTelegramChannel } from './channels/telegram.js';
 
 const CHANNELS = {
@@ -27,13 +28,34 @@ export function createGodozo(overrides = {}) {
   return {
     config,
     channel: channel.name,
-    notify: (opts) => channel.notify(normalizeNotify(opts)),
-    requestApproval: (opts) => channel.requestApproval(normalizeApproval(opts, config)),
+    notify: async (opts) => {
+      const o = normalizeNotify(opts);
+      const r = await channel.notify(o);
+      audit(config, { type: 'notify', channel: channel.name, title: o.title, message: o.message });
+      return r;
+    },
+    requestApproval: async (opts) => {
+      const o = normalizeApproval(opts, config);
+      const started = Date.now();
+      const r = await channel.requestApproval(o);
+      audit(config, {
+        type: 'approval', channel: channel.name, title: o.title, detail: o.detail,
+        decision: r.decision, approved: r.approved, timedOut: r.timedOut, by: r.by,
+        durationMs: Date.now() - started,
+      });
+      return r;
+    },
     health: () => channel.health(),
-    // Two-way: block, long-polling incoming messages → handler → reply.
+    // Two-way: block, long-polling incoming messages → handler → reply. Each
+    // message + reply length is audited.
     listen: (handler, opts) => {
       if (!channel.listen) throw new Error(`channel ${channel.name} does not support listen`);
-      return channel.listen(handler, opts);
+      const wrapped = async (msg) => {
+        const reply = await handler(msg);
+        audit(config, { type: 'message', channel: channel.name, from: msg.from, text: msg.text, replyChars: String(reply ?? '').length });
+        return reply;
+      };
+      return channel.listen(wrapped, opts);
     },
   };
 }
