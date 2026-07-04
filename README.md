@@ -12,7 +12,7 @@ or **Deny** on your phone; the agent continues.
 - 🚦 **Approve** — the agent blocks on `request_approval` until you decide
 - 🤖 **Works anywhere** — MCP server (any MCP client), a CLI (any script), or a Claude Code hook
 - 🏠 **Self-host in a minute** — Telegram channel needs **no public webhook, no inbound port** (long-polling). Runs behind NAT, on a laptop, next to a build.
-- 🪶 **Tiny & MIT** — core + CLI are zero-dependency (just Node ≥ 18)
+- 🪶 **Tiny & Apache-2.0** — core + CLI are zero-dependency (just Node ≥ 18)
 
 > Status: **v0** — Telegram channel, CLI, and MCP server. Slack / email / SMS
 > and the deterministic hook helpers are on the roadmap below.
@@ -159,4 +159,4 @@ cat ~/.godozo/audit.jsonl  # raw JSONL for grep / jq
 
 ## License
 
-MIT © 2026 Morgan Christian
+Apache License 2.0 © 2026 Morgan Christian — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
