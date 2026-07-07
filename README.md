@@ -2,7 +2,7 @@
 
 **Notify and get approvals from your AI agents — on your phone.**
 
-`godozo` (from *go* + どうぞ *dōzo*, "go ahead") is a tiny, self-hostable
+`godozo` is a tiny, self-hostable
 human-in-the-loop relay. Your agent — Claude Code, an MCP client, or any shell
 script — can **ping you** when something finishes or needs attention, and
 **pause for your approval** before it does anything risky. You tap **Approve**
