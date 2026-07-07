@@ -38,15 +38,20 @@ fi
 ## Deterministic seatbelt (belt-and-suspenders)
 
 If the loop is itself driven by an AI agent, also add a Claude Code `PreToolUse`
-hook so a prod deploy can't slip past a human even if the model forgets to ask:
+hook so a prod deploy can't slip past a human even if the model forgets to ask.
+The `matcher` is a tool NAME (`"Bash"`); `gate-hook --match` narrows to the
+commands you care about and blocks (exit 2) unless you Approve on your phone:
 
 ```json
 { "hooks": { "PreToolUse": [
-  { "matcher": "Bash(docker compose*prod*up*)",
+  { "matcher": "Bash",
     "hooks": [{ "type": "command",
-      "command": "godozo gate --title 'prod deploy' --detail \"$CLAUDE_TOOL_INPUT\"" }] }
+      "command": "godozo gate-hook --match \"docker compose\" --title \"prod deploy\"" }] }
 ]}}
 ```
+
+`gate-hook` reads the tool payload from stdin, so your phone shows the exact
+command, and it fails CLOSED — denial, timeout, or a lost connection all block.
 
 That's the whole integration: a couple of `notify` calls, one `gate` before the
 irreversible step, and (optionally) one hook matcher for the crown jewel.

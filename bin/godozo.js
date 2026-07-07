@@ -10,13 +10,16 @@ import fs from 'node:fs';
 import { createGodozo } from '../src/core.js';
 import { auditPath } from '../src/audit.js';
 
-const EXIT = { OK: 0, DENIED: 10, TIMEOUT: 20, ERROR: 1 };
+// gate exit codes compose with && / || in a shell. gate-hook instead speaks
+// Claude Code's hook protocol, where ONLY exit code 2 blocks a tool call.
+const EXIT = { OK: 0, BLOCK: 2, DENIED: 10, TIMEOUT: 20, ERROR: 1 };
 
 const HELP = `godozo — notify + get approvals from your agents, on your phone
 
 Usage:
   godozo notify <message> [--title T] [--label L]
   godozo gate --title T [--detail D] [--timeout SECONDS] [--label L]
+  godozo gate-hook [--match "substr,substr"] [--title T] [--timeout SECONDS]
   godozo listen --exec "<command>" [--timeout SECONDS]
   godozo log [--tail N]
   godozo doctor
@@ -30,6 +33,13 @@ the command, so message text can't inject shell). Only allowlisted users can dri
 
 gate exit codes:  0 approved · 10 denied · 20 timed out · 1 error
   e.g.  godozo gate --title "deploy prod?" && ./deploy.sh
+
+gate-hook: a Claude Code PreToolUse hook. Reads the tool payload as JSON on
+stdin, and BLOCKS the tool (exit 2) unless you Approve on your phone. Fails
+CLOSED — denial, timeout, or any error blocks. --match narrows to commands
+containing any of the given substrings (else it prompts on every matched tool).
+  e.g.  hooks → PreToolUse → matcher "Bash":
+        godozo gate-hook --match "push --force,reset --hard,rm -rf"
 
 Config (env or .env in the working dir):
   GODOZO_TELEGRAM_TOKEN     bot token from @BotFather
@@ -76,6 +86,44 @@ async function main() {
     if (r.timedOut) { console.error('⌛ timed out — no response'); return EXIT.TIMEOUT; }
     console.error(`${r.approved ? '✅ approved' : '🚫 denied'} by ${r.by}`);
     return r.approved ? EXIT.OK : EXIT.DENIED;
+  }
+
+  // Claude Code PreToolUse hook. The harness pipes the tool payload as JSON on
+  // stdin; we approve-or-block it via the human. Contract: exit 0 = allow the
+  // tool, exit 2 = BLOCK it (the only code Claude Code treats as a block). We
+  // fail CLOSED — deny, timeout, or any error blocks — because a seatbelt that
+  // fails open is worse than no seatbelt.
+  if (cmd === 'gate-hook' || cmd === 'hook') {
+    const payload = await readHookPayload();
+    const { action, tool, haystack } = describeTool(payload);
+
+    // --match narrows which commands prompt. If given and nothing matches, this
+    // isn't a guarded action — let it run untouched (silent allow).
+    if (args.match) {
+      const needles = String(args.match).split(',').map((s) => s.trim()).filter(Boolean);
+      if (!needles.some((n) => haystack.includes(n))) return EXIT.OK;
+    }
+
+    const title = str(args.title) || `Approve ${tool}?`;
+    const timeoutMs = args.timeout ? Number(args.timeout) * 1000 : undefined;
+    try {
+      const r = await gd.requestApproval({ title, detail: action, label: str(args.label), timeoutMs });
+      if (r.approved) {
+        // Phone approval is authoritative — tell Claude Code to allow it through.
+        console.log(JSON.stringify({ hookSpecificOutput: {
+          hookEventName: 'PreToolUse', permissionDecision: 'allow',
+          permissionDecisionReason: `Approved via godozo by ${r.by}`,
+        } }));
+        return EXIT.OK;
+      }
+      console.error(r.timedOut
+        ? `godozo: no response — blocking ${tool} (approval timed out)`
+        : `godozo: denied by ${r.by} — blocking ${tool}`);
+      return EXIT.BLOCK;
+    } catch (e) {
+      console.error(`godozo hook error: ${e.message} — blocking ${tool} (fail-safe)`);
+      return EXIT.BLOCK;
+    }
   }
 
   if (cmd === 'listen') {
@@ -126,6 +174,33 @@ async function main() {
 
 // A bare `--flag` parses to `true`; coerce that back to undefined for value opts.
 function str(v) { return typeof v === 'string' ? v : undefined; }
+
+// Read the Claude Code hook payload (tool_name + tool_input) from stdin JSON.
+// Returns {} if there's nothing on stdin (e.g. run by hand to smoke-test).
+function readHookPayload() {
+  return new Promise((resolve) => {
+    if (process.stdin.isTTY) return resolve({});
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (d) => { data += d; });
+    process.stdin.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
+    process.stdin.on('error', () => resolve({}));
+  });
+}
+
+// Turn a hook payload into a human-readable action line (shown on your phone)
+// and a haystack string for --match filtering.
+function describeTool(payload) {
+  const tool = payload?.tool_name || 'tool';
+  const ti = payload?.tool_input || {};
+  const raw = JSON.stringify(ti);
+  let action;
+  if (typeof ti.command === 'string') action = ti.command;          // Bash
+  else if (ti.file_path) action = `${tool} ${ti.file_path}`;         // Write/Edit
+  else action = raw === '{}' ? tool : raw;                           // anything else
+  if (action.length > 800) action = action.slice(0, 800) + '…';
+  return { tool, action, haystack: `${ti.command || ''}\n${raw}` };
+}
 
 // Run a shell command per incoming message. The message is passed via stdin AND
 // $GODOZO_MESSAGE — never interpolated into the command string, so message
