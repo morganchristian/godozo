@@ -25,6 +25,11 @@ export function loadConfig(overrides = {}) {
   loadDotEnv();
   return {
     channel: process.env.GODOZO_CHANNEL || 'telegram',
+    // Which channels NOTIFICATIONS fan out to. Default (empty) = every channel
+    // with creds present (so adding Slack creds auto-mirrors Telegram alerts).
+    // Set GODOZO_NOTIFY_CHANNELS="telegram,slack" to pin the list explicitly.
+    notifyChannels: (process.env.GODOZO_NOTIFY_CHANNELS || '')
+      .split(',').map((s) => s.trim()).filter(Boolean),
     label: process.env.GODOZO_LABEL || 'godozo',
     defaultTimeoutMs: (Number(process.env.GODOZO_DEFAULT_TIMEOUT) || 600) * 1000,
     // Audit log: on by default, disable with GODOZO_AUDIT=off, relocate with GODOZO_AUDIT_FILE.

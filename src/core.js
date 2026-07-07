@@ -15,49 +15,72 @@ import { audit } from './audit.js';
 import { createTelegramChannel } from './channels/telegram.js';
 import { createSlackChannel } from './channels/slack.js';
 
+// Each channel: how to build it + whether its creds are present ("ready").
 const CHANNELS = {
-  telegram: createTelegramChannel,
-  slack: createSlackChannel,
+  telegram: { create: createTelegramChannel, ready: (c) => !!(c.telegram.token && c.telegram.chatId) },
+  slack: { create: createSlackChannel, ready: (c) => !!(c.slack.botToken && c.slack.channel) },
 };
 
 export function createGodozo(overrides = {}) {
   const config = loadConfig(overrides);
-  const factory = CHANNELS[config.channel];
-  if (!factory) {
+
+  // PRIMARY channel — used for interactive requestApproval / listen, which need
+  // ONE place to answer. Defaults to GODOZO_CHANNEL (telegram).
+  const primaryDef = CHANNELS[config.channel];
+  if (!primaryDef) {
     throw new Error(`unknown channel: ${config.channel} (have: ${Object.keys(CHANNELS).join(', ')})`);
   }
-  const channel = factory(config);
+  const primary = primaryDef.create(config);
+
+  // NOTIFY fan-out — send notifications to EVERY configured channel (Telegram
+  // AND Slack), so alerts land everywhere. Default = all channels with creds;
+  // GODOZO_NOTIFY_CHANNELS pins the list. (Approvals do NOT fan out — Slack
+  // has no interactive yes/no yet — so they stay on the primary channel.)
+  const wanted = config.notifyChannels.length
+    ? config.notifyChannels.filter((n) => CHANNELS[n])
+    : Object.keys(CHANNELS).filter((n) => CHANNELS[n].ready(config));
+  const seen = new Set();
+  const notifyChans = wanted.filter((n) => !seen.has(n) && seen.add(n))
+    .map((n) => (n === config.channel ? primary : CHANNELS[n].create(config)));
+  if (!notifyChans.length) notifyChans.push(primary); // never send to nothing
+
   return {
     config,
-    channel: channel.name,
+    channel: primary.name,
+    notifyChannels: notifyChans.map((c) => c.name),
     notify: async (opts) => {
       const o = normalizeNotify(opts);
-      const r = await channel.notify(o);
-      audit(config, { type: 'notify', channel: channel.name, title: o.title, message: o.message });
-      return r;
+      // Best-effort fan-out — one channel failing must not block the others.
+      const results = await Promise.allSettled(notifyChans.map((c) => c.notify(o)));
+      const okNames = notifyChans.filter((_, i) => results[i].status === 'fulfilled').map((c) => c.name);
+      audit(config, { type: 'notify', channels: okNames, title: o.title, message: o.message });
+      if (!okNames.length) {
+        throw new Error(`notify failed on all channels: ${results.map((r) => r.reason?.message).filter(Boolean).join('; ')}`);
+      }
+      return { sent: okNames.length, channels: okNames };
     },
     requestApproval: async (opts) => {
       const o = normalizeApproval(opts, config);
       const started = Date.now();
-      const r = await channel.requestApproval(o);
+      const r = await primary.requestApproval(o);
       audit(config, {
-        type: 'approval', channel: channel.name, title: o.title, detail: o.detail,
+        type: 'approval', channel: primary.name, title: o.title, detail: o.detail,
         decision: r.decision, approved: r.approved, timedOut: r.timedOut, by: r.by,
         durationMs: Date.now() - started,
       });
       return r;
     },
-    health: () => channel.health(),
-    // Two-way: block, long-polling incoming messages → handler → reply. Each
-    // message + reply length is audited.
+    health: () => primary.health(),
+    // Two-way: block, long-polling incoming messages → handler → reply (primary
+    // channel only). Each message + reply length is audited.
     listen: (handler, opts) => {
-      if (!channel.listen) throw new Error(`channel ${channel.name} does not support listen`);
+      if (!primary.listen) throw new Error(`channel ${primary.name} does not support listen`);
       const wrapped = async (msg) => {
         const reply = await handler(msg);
-        audit(config, { type: 'message', channel: channel.name, from: msg.from, text: msg.text, replyChars: String(reply ?? '').length });
+        audit(config, { type: 'message', channel: primary.name, from: msg.from, text: msg.text, replyChars: String(reply ?? '').length });
         return reply;
       };
-      return channel.listen(wrapped, opts);
+      return primary.listen(wrapped, opts);
     },
   };
 }

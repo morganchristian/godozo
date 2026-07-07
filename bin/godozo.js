@@ -113,7 +113,8 @@ async function main() {
   if (cmd === 'doctor') {
     try {
       const h = await gd.health();
-      console.log(`✅ channel=${gd.channel} bot=${h.bot ? '@' + h.bot : '(ok)'}${h.target ? ` target=${h.target}` : ''}`);
+      console.log(`✅ primary=${gd.channel} bot=${h.bot ? '@' + h.bot : '(ok)'}${h.target ? ` target=${h.target}` : ''}`);
+      console.log(`   notify → ${gd.notifyChannels.join(', ')}`);
       console.log(`   audit: ${auditPath(gd.config) || 'disabled'}`);
       return EXIT.OK;
     } catch (e) { console.error(`✗ ${e.message}`); return EXIT.ERROR; }
